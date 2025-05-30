@@ -1,10 +1,12 @@
 # 注意规则在满足自己需求情况下，尽量做到精简，不要过度复杂，以免影响性能。
 # 机场订阅
 proxy-providers:
-  Airport1:
+  xmrth:
     url: "机场订阅"
     type: http
     interval: 86400
+    filter: "(?i)中继"
+    exclude-filter: "(?i)剩余"
     health-check:
       enable: true
       url: https://www.gstatic.com/generate_204
@@ -41,7 +43,7 @@ profile:
 # 控制面板
 external-controller: 0.0.0.0:9090
 secret: ""
-external-ui: "/etc/mihomo/run/ui"
+external-ui: "/etc/nikki/run/ui"
 external-ui-name: zashboard
 external-ui-url: "https://github.com/Zephyruso/zashboard/archive/refs/heads/gh-pages.zip"
 
@@ -51,7 +53,7 @@ tun:
   enable: true
   # system/gvisor/mixed
   stack: mixed
-  dns-hijack: ["any:53", "tcp://any:53"]
+  # dns-hijack: ["any:53", "tcp://any:53"]
   auto-route: true
   auto-redirect: true
   auto-detect-interface: true
@@ -60,10 +62,10 @@ tun:
 dns:
   enable: true
   listen: 0.0.0.0:1053
-  ipv6: false
+  ipv6: true
   respect-rules: true
   enhanced-mode: fake-ip
-  fake-ip-range: 28.0.0.1/8
+  fake-ip-range: 198.18.0.1/16
   fake-ip-filter-mode: blacklist
   fake-ip-filter:
     - "rule-set:private_domain,cn_domain"
@@ -76,16 +78,31 @@ dns:
     - https://223.5.5.5/dns-query
   # namesever尽量用运营商提供的DNS
   nameserver:
+    - 61.128.128.68
     - 223.5.5.5
-    - 119.29.29.29
 
 # 出站策略
 # 注意锚点必须放在引用的上方，可以集中把锚点全部放yaml的顶部。
-pr: &pr {type: select, proxies: [🚀 节点选择, ♻️ 香港自动, ♻️ 日本自动, ♻️ 美国自动, ♻️ 自动选择, 🇭🇰 香港节点, 🇯🇵 日本节点, 🇺🇲 美国节点, 🚀 手动切换, 直连]}
+pr: &pr {type: select, proxies: [🚀 节点选择, ♻️ 自动选择, 🚀 手动切换, 🇭🇰 香港自动, 🇨🇳 台湾自动, 🇯🇵 日本自动, 🇰🇷 韩国自动, 🇺🇲 美国自动, 🇸🇬 新加坡自动,
+    🇭🇰 香港故转, 🇨🇳 台湾故转, 🇯🇵 日本故转, 🇰🇷 韩国故转, 🇺🇲 美国故转, 🇸🇬 新加坡故转, 直连]}
+# 锚点模板
+region-anchor:
+  manual: &manual {type: select, include-all: true}
+  auto: &auto {type: url-test, include-all: true, tolerance: 20, interval: 300}
+
+# 地区过滤器
+filters:
+  hk: &hk_filter "(?i)(?=.*(港|hk|hong))^((?!(台|日|韩|新|深|美)).)*$"
+  tw: &tw_filter "(?i)(?=.*(台|新北|彰化|tw|taiwan))^((?!(港|日|韩|新|深|美)).)*$"
+  jp: &jp_filter "(?i)(?=.*(日|jp|japan))^((?!(港|台|韩|新|美)).)*$"
+  kr: &kr_filter "(?i)(?=.*(kr|korea|kor|首尔|韩|韓))^((?!(台|日|新|深|美)).)*$"
+  us: &us_filter "(?i)(?=.*(美|us|states|america))^((?!(港|台|日|韩|新)).)*$"
+  sg: &sg_filter "(?i)(?=.*(广新|新加坡|sg|坡|狮城|🇸🇬|singapore))^((?!(港|台|日|韩|美|深)).)*$"
+
 proxy-groups:
-  - {name: 🚀 节点选择, type: select, proxies: [ ♻️ 香港自动, ♻️ 日本自动, ♻️ 美国自动, ♻️ 自动选择, 🇭🇰 香港节点, 🇯🇵 日本节点, 🇺🇲 美国节点, 🚀 手动切换, 直连]}
-  - {name: 🚀 手动切换, type: select, include-all: true}
-  - {name: ♻️ 自动选择, type: url-test, include-all: true, tolerance: 20, interval: 300, filter: "^((?!(直连)).)*$"}
+  - {name: 🚀 节点选择, type: select, proxies: [ ♻️ 自动选择, 🚀 手动切换, 🇭🇰 香港自动, 🇨🇳 台湾自动, 🇯🇵 日本自动, 🇰🇷 韩国自动, 🇺🇲 美国自动, 🇸🇬 新加坡自动, 直连]}
+  - {name: 🚀 手动切换, type: select, include-all: true, filter: "^((?!(直连|拒绝)).)*$"}
+  - {name: ♻️ 自动选择, type: url-test, include-all: true, tolerance: 20, interval: 300, filter: "^((?!(直连|拒绝)).)*$"}
   - {name: 📹 油管视频, <<: *pr}
   - {name: 🍀 Google, <<: *pr}
   - {name: 🤖 ChatGPT, <<: *pr}
@@ -99,24 +116,43 @@ proxy-groups:
   - {name: 🎮 Steam平台, <<: *pr}
   - {name: 🍎 Apple, type: select, proxies: [直连, 🚀 节点选择]}
   - {name: 🎯 直连, type: select, proxies: [直连, 🚀 节点选择]}
+  - {name: 🛑 手动屏蔽, type: select, proxies: [ 拒绝, 直连]}
   - {name: 🐟 漏网之鱼, <<: *pr}
-  - {name: 🇭🇰 香港节点, type: select, include-all: true, filter: "(?i)港|hk|hongkong|hong kong"}
-  - {name: 🇯🇵 日本节点, type: select, include-all: true, filter: "(?i)日|jp|japan"}
-  - {name: 🇺🇲 美国节点, type: select, include-all: true, filter: "(?i)美|us|unitedstates|united states"}
-  - {name: ♻️ 香港自动, type: url-test, include-all: true, tolerance: 20, interval: 300, filter: "(?=.*(港|HK|(?i)Hong))^((?!(台|日|韩|新|深|美)).)*$"}
-  - {name: ♻️ 日本自动, type: url-test, include-all: true, tolerance: 20, interval: 300, filter: "(?=.*(日|JP|(?i)Japan))^((?!(港|台|韩|新|美)).)*$" }
-  - {name: ♻️ 美国自动, type: url-test, include-all: true, tolerance: 20, interval: 300, filter: "(?=.*(美|US|(?i)States|America))^((?!(港|台|日|韩|新)).)*$"}
+  # 故障转移节点组
+  - {name: 🇭🇰 香港故转, type: fallback, proxies: [🇭🇰 香港手动, 🇭🇰 香港自动], tolerance: 20, interval: 300}
+  - {name: 🇨🇳 台湾故转, type: fallback, proxies: [🇨🇳 台湾手动, 🇨🇳 台湾自动], tolerance: 20, interval: 300}
+  - {name: 🇯🇵 日本故转, type: fallback, proxies: [🇯🇵 日本手动, 🇯🇵 日本自动], tolerance: 20, interval: 300}
+  - {name: 🇰🇷 韩国故转, type: fallback, proxies: [🇰🇷 韩国手动, 🇰🇷 韩国自动], tolerance: 20, interval: 300}
+  - {name: 🇺🇲 美国故转, type: fallback, proxies: [🇺🇲 美国手动, 🇺🇲 美国自动], tolerance: 20, interval: 300}
+  - {name: 🇸🇬 新加坡故转, type: fallback, proxies: [🇸🇬 新加坡手动, 🇸🇬 新加坡自动], tolerance: 20, interval: 300}
+  # 手动节点组
+  - {name: 🇭🇰 香港手动, <<: *manual, filter: *hk_filter}
+  - {name: 🇨🇳 台湾手动, <<: *manual, filter: *tw_filter}
+  - {name: 🇯🇵 日本手动, <<: *manual, filter: *jp_filter}
+  - {name: 🇰🇷 韩国手动, <<: *manual, filter: *kr_filter}
+  - {name: 🇺🇲 美国手动, <<: *manual, filter: *us_filter}
+  - {name: 🇸🇬 新加坡手动, <<: *manual, filter: *sg_filter}
+
+  # 自动节点组
+  - {name: 🇭🇰 香港自动, <<: *auto, filter: *hk_filter}
+  - {name: 🇨🇳 台湾自动, <<: *auto, filter: *tw_filter}
+  - {name: 🇯🇵 日本自动, <<: *auto, filter: *jp_filter}
+  - {name: 🇰🇷 韩国自动, <<: *auto, filter: *kr_filter}
+  - {name: 🇺🇲 美国自动, <<: *auto, filter: *us_filter}
+  - {name: 🇸🇬 新加坡自动, <<: *auto, filter: *sg_filter}
+
+
 
 
 # 规则匹配
 # 此规则部分没有做防泄露处理，因为弊严重大于利！
 rules:
   - RULE-SET,private_domain,直连
-  - RULE-SET,zdy_jujue,拒绝
+  - RULE-SET,zdy_jujue,🛑 手动屏蔽
   - RULE-SET,zdy_zidong,🚀 节点选择
   - RULE-SET,zdy_zilian,直连
-  - RULE-SET,steam_domain,🎮 Steam平台
   - RULE-SET,steam_cn_domain,🎮 Steam下载
+  - RULE-SET,steam_domain,🎮 Steam平台
   - RULE-SET,apple_domain,🍎 Apple
   - RULE-SET,proxylite,🚀 节点选择
   - RULE-SET,ai,🤖 ChatGPT
